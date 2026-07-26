@@ -190,7 +190,7 @@ export default function AdminPage() {
         body: JSON.stringify({ 
           sponsor_budget: sponsorBudgetInput,
           sponsor_name: sponsorNameInput,
-          increment: true
+          increment: false
         }),
       });
 
