@@ -21,16 +21,18 @@ interface SummaryCardsProps {
 }
 
 export default function SummaryCards({ expenses, sponsorBudget = 0, sponsorName = 'Sponsor' }: SummaryCardsProps) {
-  const totalSpent = expenses.reduce((sum, item) => sum + item.amount, 0);
-  const count = expenses.length;
+  const totalSpent = expenses
+    .filter(e => e.category !== 'Top-up')
+    .reduce((sum, item) => sum + item.amount, 0);
+  const count = expenses.filter(e => e.category !== 'Top-up').length;
 
   // Calculate sources
   const spentFromSponsor = expenses
-    .filter(e => e.paymentSource === 'Sponsor')
+    .filter(e => e.paymentSource === 'Sponsor' && e.category !== 'Top-up')
     .reduce((sum, item) => sum + item.amount, 0);
     
   const spentFromOther = expenses
-    .filter(e => e.paymentSource !== 'Sponsor')
+    .filter(e => e.paymentSource !== 'Sponsor' && e.category !== 'Top-up')
     .reduce((sum, item) => sum + item.amount, 0);
 
   const remainingSponsorBudget = sponsorBudget - spentFromSponsor;

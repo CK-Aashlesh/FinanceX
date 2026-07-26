@@ -1,7 +1,5 @@
-// TODO: In a production application, these secrets must be stored in environment variables (e.g. .env)
-// and accessed via process.env.SITE_PASSWORD and process.env.ADMIN_KEY to prevent leaking secrets in client bundles.
-export const SITE_PASSWORDS = ["treasurer@numa", "treasurer@ziyana"] as const;
-export const ADMIN_KEY = "treasurer@adminsh";
+export const SITE_PASSWORDS = process.env.SITE_PASSWORDS?.split(',') ?? [];
+export const ADMIN_KEY = process.env.ADMIN_KEY ?? "";
 
 // Categories for expenses
 export const EXPENSE_CATEGORIES = [

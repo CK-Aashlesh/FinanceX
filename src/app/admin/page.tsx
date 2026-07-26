@@ -1,21 +1,20 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import {
-  ShieldCheck,
-  Lock,
-  ChevronRight,
-  LogOut,
-  ListOrdered,
-  Terminal,
-  Plus,
+import React, { useState, useEffect } from 'react';
+import { 
+  ShieldCheck, 
+  Lock, 
+  ChevronRight, 
+  LogOut, 
+  ListOrdered, 
+  Terminal, 
+  Plus, 
   Trash2,
-  AlertCircle,
-} from "lucide-react";
-import { loginAdmin, logoutAdmin, logoutSite } from "../actions/auth";
-import ExpenseForm from "@/components/ExpenseForm";
-import ExpenseTable from "@/components/ExpenseTable";
-import { ADMIN_KEY } from "@/lib/constants";
+  AlertCircle
+} from 'lucide-react';
+import { loginAdmin, logoutAdmin, logoutSite } from '../actions/auth';
+import ExpenseForm from '@/components/ExpenseForm';
+import ExpenseTable from '@/components/ExpenseTable';
 
 interface Expense {
   id: string;
@@ -33,7 +32,7 @@ interface Expense {
 
 interface ActivityLog {
   id: string;
-  action: "CREATE" | "UPDATE" | "DELETE";
+  action: 'CREATE' | 'UPDATE' | 'DELETE';
   username: string;
   details: string;
   timestamp: string;
@@ -41,7 +40,7 @@ interface ActivityLog {
 
 export default function AdminPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [adminKey, setAdminKey] = useState("");
+  const [adminKey, setAdminKey] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
 
@@ -53,13 +52,13 @@ export default function AdminPage() {
 
   // Settings Budget States
   const [sponsorBudget, setSponsorBudget] = useState(0);
-  const [sponsorBudgetInput, setSponsorBudgetInput] = useState("");
-  const [sponsorName, setSponsorName] = useState("Sponsor");
-  const [sponsorNameInput, setSponsorNameInput] = useState("");
+  const [sponsorBudgetInput, setSponsorBudgetInput] = useState('');
+  const [sponsorName, setSponsorName] = useState('Sponsor');
+  const [sponsorNameInput, setSponsorNameInput] = useState('');
   const [isUpdatingBudget, setIsUpdatingBudget] = useState(false);
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<"ledger" | "logs">("ledger");
+  const [activeTab, setActiveTab] = useState<'ledger' | 'logs'>('ledger');
 
   // Modals
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -67,38 +66,44 @@ export default function AdminPage() {
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [isDeletingPending, setIsDeletingPending] = useState(false);
 
+  const getStoredAdminKey = () => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('adminKey') || '';
+    }
+    return '';
+  };
+
   const handleAdminLogout = async () => {
     try {
       await logoutAdmin();
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('adminKey');
+      }
       setIsAdmin(false);
       setExpenses([]);
       setLogs([]);
     } catch (err) {
-      console.error("Logout failed", err);
+      console.error('Logout failed', err);
     }
   };
 
   // Check admin status on load & detect page reloads
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const navs = window.performance.getEntriesByType("navigation");
-      if (
-        navs.length > 0 &&
-        (navs[0] as PerformanceNavigationTiming).type === "reload"
-      ) {
+    if (typeof window !== 'undefined') {
+      const navs = window.performance.getEntriesByType('navigation');
+      if (navs.length > 0 && (navs[0] as PerformanceNavigationTiming).type === 'reload') {
         // If reloaded, clear admin credentials and site access
         handleAdminLogout();
         logoutSite().then(() => {
-          window.location.href = "/login";
+          window.location.href = '/login';
         });
         return;
       }
     }
 
-    const hasAdminCookie = document.cookie
-      .split("; ")
-      .some((row) => row.startsWith("admin_auth="));
-    setIsAdmin(hasAdminCookie);
+    const hasAdminCookie = document.cookie.split('; ').some(row => row.startsWith('admin_auth='));
+    const hasAdminKey = typeof window !== 'undefined' && !!sessionStorage.getItem('adminKey');
+    setIsAdmin(hasAdminCookie && hasAdminKey);
   }, []);
 
   // Fetch admin console data
@@ -107,23 +112,23 @@ export default function AdminPage() {
     setDataError(null);
     try {
       // Fetch expenses
-      const expRes = await fetch("/api/expenses");
-      if (!expRes.ok) throw new Error("Failed to load expenses");
+      const expRes = await fetch('/api/expenses');
+      if (!expRes.ok) throw new Error('Failed to load expenses');
       const expData = await expRes.json();
       setExpenses(expData);
 
       // Fetch logs - guarded by x-admin-key header
-      const logRes = await fetch("/api/logs", {
+      const logRes = await fetch('/api/logs', {
         headers: {
-          "x-admin-key": ADMIN_KEY,
-        },
+          'x-admin-key': getStoredAdminKey()
+        }
       });
-      if (!logRes.ok) throw new Error("Failed to load activity logs");
+      if (!logRes.ok) throw new Error('Failed to load activity logs');
       const logData = await logRes.json();
       setLogs(logData);
 
       // Fetch settings budget & name
-      const settingsRes = await fetch("/api/settings");
+      const settingsRes = await fetch('/api/settings');
       if (settingsRes.ok) {
         const settingsData = await settingsRes.json();
         if (settingsData.sponsor_budget !== undefined) {
@@ -131,12 +136,12 @@ export default function AdminPage() {
           setSponsorBudgetInput(settingsData.sponsor_budget);
         }
         if (settingsData.sponsor_name !== undefined) {
-          setSponsorName(settingsData.sponsor_name || "Sponsor");
+          setSponsorName(settingsData.sponsor_name || 'Sponsor');
           setSponsorNameInput(settingsData.sponsor_name);
         }
       }
     } catch (err: any) {
-      setDataError(err.message || "Error syncing admin data");
+      setDataError(err.message || 'Error syncing admin data');
     } finally {
       setIsLoadingData(false);
     }
@@ -156,13 +161,16 @@ export default function AdminPage() {
     try {
       const res = await loginAdmin(adminKey);
       if (res.success) {
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('adminKey', adminKey);
+        }
         setIsAdmin(true);
-        setAdminKey("");
+        setAdminKey('');
       } else {
-        setLoginError(res.error || "Invalid Admin Key");
+        setLoginError(res.error || 'Invalid Admin Key');
       }
     } catch (err) {
-      setLoginError("Authentication failed");
+      setLoginError('Authentication failed');
     } finally {
       setIsPending(false);
     }
@@ -173,30 +181,28 @@ export default function AdminPage() {
     e.preventDefault();
     setIsUpdatingBudget(true);
     try {
-      const res = await fetch("/api/settings", {
-        method: "POST",
+      const res = await fetch('/api/settings', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
-          "x-admin-key": ADMIN_KEY,
+          'Content-Type': 'application/json',
+          'x-admin-key': getStoredAdminKey(),
         },
-        body: JSON.stringify({
+        body: JSON.stringify({ 
           sponsor_budget: sponsorBudgetInput,
           sponsor_name: sponsorNameInput,
-          // Request the server to treat the provided sponsor_budget as
-          // an increment (top-up) to the existing sponsor pool.
-          increment: true,
+          increment: true
         }),
       });
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || "Failed to update settings");
+        throw new Error(errData.error || 'Failed to update settings');
       }
 
-      alert("Sponsor settings updated successfully!");
+      alert('Sponsor settings updated successfully!');
       await fetchConsoleData();
     } catch (err: any) {
-      alert(err.message || "Failed to update settings");
+      alert(err.message || 'Failed to update settings');
     } finally {
       setIsUpdatingBudget(false);
     }
@@ -206,23 +212,21 @@ export default function AdminPage() {
   const handleFormSubmit = async (expenseData: any) => {
     try {
       const isEditing = !!expenseData.id;
-      const url = isEditing
-        ? `/api/expenses/${expenseData.id}`
-        : "/api/expenses";
-      const method = isEditing ? "PUT" : "POST";
+      const url = isEditing ? `/api/expenses/${expenseData.id}` : '/api/expenses';
+      const method = isEditing ? 'PUT' : 'POST';
 
       const res = await fetch(url, {
         method,
         headers: {
-          "Content-Type": "application/json",
-          "x-admin-key": ADMIN_KEY, // Required for updates
+          'Content-Type': 'application/json',
+          'x-admin-key': getStoredAdminKey(), // Required for updates
         },
         body: JSON.stringify(expenseData),
       });
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || "Failed to save expense");
+        throw new Error(errData.error || 'Failed to save expense');
       }
 
       // Close modal & reload data
@@ -230,7 +234,7 @@ export default function AdminPage() {
       setEditingExpense(null);
       await fetchConsoleData();
     } catch (err: any) {
-      alert(err.message || "Operation failed");
+      alert(err.message || 'Operation failed');
       throw err;
     }
   };
@@ -242,21 +246,21 @@ export default function AdminPage() {
 
     try {
       const res = await fetch(`/api/expenses/${deletingExpense.id}`, {
-        method: "DELETE",
+        method: 'DELETE',
         headers: {
-          "x-admin-key": ADMIN_KEY,
+          'x-admin-key': getStoredAdminKey(),
         },
       });
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || "Failed to delete expense");
+        throw new Error(errData.error || 'Failed to delete expense');
       }
 
       setDeletingExpense(null);
       await fetchConsoleData();
     } catch (err: any) {
-      alert(err.message || "Delete failed");
+      alert(err.message || 'Delete failed');
     } finally {
       setIsDeletingPending(false);
     }
@@ -273,12 +277,12 @@ export default function AdminPage() {
 
   const formatLogDate = (dateStr: string) => {
     const d = new Date(dateStr);
-    return d.toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
+    return d.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
       hour12: false,
     });
   };
@@ -304,9 +308,7 @@ export default function AdminPage() {
               <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 mb-4">
                 <Lock className="w-6 h-6" />
               </div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">
-                Admin Authentication
-              </h1>
+              <h1 className="text-2xl font-bold text-white tracking-tight">Admin Authentication</h1>
               <p className="text-xs text-zinc-400 mt-2">
                 Enter your administrative key to unlock ledger audit tools.
               </p>
@@ -365,9 +367,9 @@ export default function AdminPage() {
       <header className="border-b border-zinc-900 bg-black/80 backdrop-blur-md sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img
-              src="/logo.jpg"
-              alt="Sphere Hive Logo"
+            <img 
+              src="/logo.jpg" 
+              alt="Sphere Hive Logo" 
               className="w-10 h-10 object-contain invert rounded-lg"
             />
             <div>
@@ -378,9 +380,7 @@ export default function AdminPage() {
                 </span>
               </h1>
               <p className="text-[10px] text-zinc-400 text-left">
-                Welcome back,{" "}
-                <strong className="text-orange-400">Arshad</strong> • Audit
-                ledger transactions
+                Welcome back, <strong className="text-orange-400">Arshad</strong> • Audit ledger transactions
               </p>
             </div>
           </div>
@@ -399,26 +399,27 @@ export default function AdminPage() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 space-y-6">
+        
         {/* Tab Controls and Add Button */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-zinc-900/20 border border-zinc-800 p-2 rounded-2xl">
           <div className="flex gap-1.5">
             <button
-              onClick={() => setActiveTab("ledger")}
+              onClick={() => setActiveTab('ledger')}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab === "ledger"
-                  ? "bg-zinc-800 text-white shadow-md"
-                  : "text-zinc-400 hover:text-white"
+                activeTab === 'ledger'
+                  ? 'bg-zinc-800 text-white shadow-md'
+                  : 'text-zinc-400 hover:text-white'
               }`}
             >
               <ListOrdered className="w-4 h-4" />
               Audit Ledger ({expenses.length})
             </button>
             <button
-              onClick={() => setActiveTab("logs")}
+              onClick={() => setActiveTab('logs')}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab === "logs"
-                  ? "bg-zinc-800 text-white shadow-md"
-                  : "text-zinc-400 hover:text-white"
+                activeTab === 'logs'
+                  ? 'bg-zinc-800 text-white shadow-md'
+                  : 'text-zinc-400 hover:text-white'
               }`}
             >
               <Terminal className="w-4 h-4" />
@@ -426,24 +427,14 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {activeTab === "ledger" && (
+          {activeTab === 'ledger' && (
             <div className="flex gap-2">
               <button
                 onClick={fetchConsoleData}
                 className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold rounded-xl border border-zinc-800 transition-colors cursor-pointer"
               >
-                <svg
-                  className="w-3.5 h-3.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M21 3v5h-5"
-                  />
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M21 3v5h-5" />
                 </svg>
                 Refresh
               </button>
@@ -466,8 +457,8 @@ export default function AdminPage() {
           <div className="flex items-center gap-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs px-4 py-3 rounded-xl">
             <AlertCircle className="w-4.5 h-4.5 shrink-0" />
             <p className="font-semibold">{dataError}</p>
-            <button
-              onClick={fetchConsoleData}
+            <button 
+              onClick={fetchConsoleData} 
               className="ml-auto underline hover:text-white transition-colors"
             >
               Retry
@@ -480,7 +471,7 @@ export default function AdminPage() {
           <div className="flex items-center justify-center py-24">
             <div className="w-8 h-8 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin" />
           </div>
-        ) : activeTab === "ledger" ? (
+        ) : activeTab === 'ledger' ? (
           <div className="space-y-6">
             {/* Sponsor Settings Card */}
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-6 shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -490,18 +481,11 @@ export default function AdminPage() {
                   Sponsor Budget Settings ({sponsorName})
                 </h3>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Configure funding pool details. Active Sponsor balance:{" "}
-                  <strong className="text-zinc-200">
-                    ₹{sponsorBudget.toFixed(2)}
-                  </strong>
-                  .
+                  Configure funding pool details. Active Sponsor balance: <strong className="text-zinc-200">₹{sponsorBudget.toFixed(2)}</strong>.
                 </p>
               </div>
-
-              <form
-                onSubmit={handleUpdateBudget}
-                className="flex flex-col sm:flex-row gap-3 max-w-xl w-full"
-              >
+              
+              <form onSubmit={handleUpdateBudget} className="flex flex-col sm:flex-row gap-3 max-w-xl w-full">
                 {/* Title / Name of the Money came from */}
                 <div className="relative flex-1">
                   <input
@@ -516,9 +500,7 @@ export default function AdminPage() {
 
                 {/* Amount / Budget */}
                 <div className="relative sm:w-40">
-                  <span className="absolute left-3 top-2.5 text-zinc-550 text-xs font-bold">
-                    ₹
-                  </span>
+                  <span className="absolute left-3 top-2.5 text-zinc-550 text-xs font-bold">₹</span>
                   <input
                     type="number"
                     step="0.01"
@@ -536,17 +518,17 @@ export default function AdminPage() {
                   disabled={isUpdatingBudget}
                   className="px-4 py-2 bg-zinc-800 hover:bg-zinc-750 text-white text-xs font-bold rounded-xl border border-zinc-700 transition-all cursor-pointer disabled:opacity-50 whitespace-nowrap"
                 >
-                  {isUpdatingBudget ? "Updating..." : "Save Settings"}
+                  {isUpdatingBudget ? 'Updating...' : 'Save Settings'}
                 </button>
               </form>
             </div>
 
             <div className="bg-zinc-900/30 border border-zinc-800 rounded-3xl overflow-hidden shadow-xl">
-              <ExpenseTable
-                expenses={expenses}
-                isAdminMode={true}
-                onEdit={handleEditClick}
-                onDelete={handleDeleteClick}
+              <ExpenseTable 
+                expenses={expenses} 
+                isAdminMode={true} 
+                onEdit={handleEditClick} 
+                onDelete={handleDeleteClick} 
                 isLoading={isLoadingData}
               />
             </div>
@@ -556,12 +538,8 @@ export default function AdminPage() {
           <div className="backdrop-blur-xl bg-zinc-900/40 border border-zinc-800 rounded-3xl p-6 shadow-xl space-y-6">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
               <div>
-                <h3 className="text-sm font-bold text-white">
-                  Database Action Log
-                </h3>
-                <p className="text-[10px] text-zinc-400 text-left">
-                  Chronological history of SQL updates
-                </p>
+                <h3 className="text-sm font-bold text-white">Database Action Log</h3>
+                <p className="text-[10px] text-zinc-400 text-left">Chronological history of SQL updates</p>
               </div>
               <button
                 onClick={fetchConsoleData}
@@ -579,16 +557,10 @@ export default function AdminPage() {
             ) : (
               <div className="relative pl-6 border-l border-zinc-850 space-y-6">
                 {logs.map((log) => {
-                  let badgeColor = "bg-zinc-850 border-zinc-750 text-zinc-400";
-                  if (log.action === "CREATE")
-                    badgeColor =
-                      "bg-emerald-500/10 border-emerald-500/20 text-emerald-400";
-                  if (log.action === "UPDATE")
-                    badgeColor =
-                      "bg-cyan-500/10 border-cyan-500/20 text-cyan-400";
-                  if (log.action === "DELETE")
-                    badgeColor =
-                      "bg-rose-500/10 border-rose-500/20 text-rose-455";
+                  let badgeColor = 'bg-zinc-850 border-zinc-750 text-zinc-400';
+                  if (log.action === 'CREATE') badgeColor = 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400';
+                  if (log.action === 'UPDATE') badgeColor = 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400';
+                  if (log.action === 'DELETE') badgeColor = 'bg-rose-500/10 border-rose-500/20 text-rose-455';
 
                   return (
                     <div key={log.id} className="relative group text-left">
@@ -596,9 +568,7 @@ export default function AdminPage() {
                       <span className="absolute -left-[31px] top-1.5 w-2.5 h-2.5 rounded-full bg-zinc-800 border border-zinc-950 group-hover:bg-orange-400 transition-colors" />
 
                       <div className="flex items-center gap-2 mb-1.5">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[9px] font-mono font-semibold border ${badgeColor}`}
-                        >
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-semibold border ${badgeColor}`}>
                           {log.action}
                         </span>
                         <span className="text-[10px] font-bold text-zinc-350">
@@ -633,8 +603,8 @@ export default function AdminPage() {
             >
               <ChevronRight className="w-5 h-5 rotate-90" />
             </button>
-            <ExpenseForm
-              initialExpense={editingExpense}
+            <ExpenseForm 
+              initialExpense={editingExpense} 
               onSubmit={handleFormSubmit}
               onCancel={() => {
                 setIsFormOpen(false);
@@ -654,12 +624,8 @@ export default function AdminPage() {
                 <Trash2 className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">
-                  Delete Transaction?
-                </h3>
-                <p className="text-[10px] text-zinc-400">
-                  This action cannot be undone
-                </p>
+                <h3 className="text-sm font-bold text-white">Delete Transaction?</h3>
+                <p className="text-[10px] text-zinc-400">This action cannot be undone</p>
               </div>
             </div>
 
@@ -668,9 +634,7 @@ export default function AdminPage() {
                 {deletingExpense.title}
               </p>
               <div className="flex justify-between text-[10px] text-zinc-550">
-                <span className="font-bold text-zinc-300">
-                  ₹{deletingExpense.amount.toFixed(2)}
-                </span>
+                <span className="font-bold text-zinc-300">₹{deletingExpense.amount.toFixed(2)}</span>
               </div>
             </div>
 
@@ -692,7 +656,9 @@ export default function AdminPage() {
                 {isDeletingPending ? (
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
-                  <>Confirm Delete</>
+                  <>
+                    Confirm Delete
+                  </>
                 )}
               </button>
             </div>
