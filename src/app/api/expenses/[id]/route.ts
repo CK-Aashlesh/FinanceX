@@ -64,6 +64,11 @@ export async function PUT(request: Request, { params }: RouteParams) {
     }
     const oldExpense = oldExpenses[0];
 
+    const isTopUp = oldExpense.category === 'Top-up';
+    const finalCategory = isTopUp ? 'Top-up' : (category && typeof category === 'string' ? category.trim() : 'General');
+    const finalPaymentSource = isTopUp ? 'Sponsor' : (paymentSource && typeof paymentSource === 'string' ? paymentSource.trim() : 'Other');
+    const finalTitle = isTopUp ? 'Sponsor Funding Pool' : title.trim();
+
     const parsedDate = new Date(date);
 
     // Update expense record
@@ -72,17 +77,33 @@ export async function PUT(request: Request, { params }: RouteParams) {
        SET title = ?, amount = ?, category = ?, paidBy = ?, date = ?, notes = ?, updatedBy = 'admin', billImageUrl = ?, paymentSource = ? 
        WHERE id = ?`,
       [
-        title.trim(),
+        finalTitle,
         parsedAmount,
-        category && typeof category === 'string' ? category.trim() : 'General',
+        finalCategory,
         paidBy.trim(),
         parsedDate,
         notes ? notes.trim() : null,
         billImageUrl || null,
-        paymentSource && typeof paymentSource === 'string' ? paymentSource.trim() : 'Other',
+        finalPaymentSource,
         id
       ]
     );
+
+    // Synchronize settings if the edited row is the Sponsor Funding Pool config
+    if (isTopUp) {
+      await query(
+        `INSERT INTO FIN_settings (setting_key, setting_value) 
+         VALUES ('sponsor_budget', ?) 
+         ON DUPLICATE KEY UPDATE setting_value = ?`,
+        [String(parsedAmount.toFixed(2)), String(parsedAmount.toFixed(2))]
+      );
+      await query(
+        `INSERT INTO FIN_settings (setting_key, setting_value) 
+         VALUES ('sponsor_name', ?) 
+         ON DUPLICATE KEY UPDATE setting_value = ?`,
+        [paidBy.trim(), paidBy.trim()]
+      );
+    }
 
     // Write activity log
     const logId = crypto.randomUUID();
@@ -142,6 +163,13 @@ export async function DELETE(request: Request, { params }: RouteParams) {
 
     // Delete record
     await query('DELETE FROM FIN_expenses WHERE id = ?', [id]);
+
+    // Synchronize settings: reset budget to 0.00 if the deleted row is the Sponsor Funding Pool config
+    if (oldExpense.category === 'Top-up') {
+      await query(
+        "UPDATE FIN_settings SET setting_value = '0.00' WHERE setting_key = 'sponsor_budget'"
+      );
+    }
 
     // Write activity log
     const logId = crypto.randomUUID();
