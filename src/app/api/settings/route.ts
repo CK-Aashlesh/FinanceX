@@ -104,15 +104,39 @@ export async function POST(request: Request) {
            ON DUPLICATE KEY UPDATE setting_value = ?`,
           [String(parsedBudget.toFixed(2)), String(parsedBudget.toFixed(2))],
         );
+
+        // Synchronize ledger: delete previous top-up rows and insert a new absolute funding pool row
+        await query("DELETE FROM FIN_expenses WHERE category = 'Top-up'");
+        
+        if (parsedBudget > 0) {
+          const topUpId = crypto.randomUUID();
+          let finalSponsorName = sponsor_name !== undefined ? String(sponsor_name).trim() : '';
+          if (!finalSponsorName) {
+            const nameRows = await query<any[]>("SELECT setting_value FROM FIN_settings WHERE setting_key = 'sponsor_name'");
+            finalSponsorName = nameRows.length > 0 ? nameRows[0].setting_value : 'Sponsor';
+          }
+
+          await query(
+            `INSERT INTO FIN_expenses (id, title, amount, category, paidBy, date, notes, createdBy, paymentSource)
+             VALUES (?, 'Sponsor Funding Pool', ?, 'Top-up', ?, ?, 'Sponsor funding pool configured by administrator', 'admin', 'Sponsor')`,
+            [topUpId, parsedBudget, finalSponsorName, new Date()]
+          );
+        }
       }
     }
 
     if (sponsor_name !== undefined) {
+      const nameVal = String(sponsor_name).trim();
       await query(
         `INSERT INTO FIN_settings (setting_key, setting_value) 
          VALUES ('sponsor_name', ?) 
          ON DUPLICATE KEY UPDATE setting_value = ?`,
-        [String(sponsor_name).trim(), String(sponsor_name).trim()],
+        [nameVal, nameVal],
+      );
+      // Keep existing top-up transaction paidBy values in sync
+      await query(
+        "UPDATE FIN_expenses SET paidBy = ? WHERE category = 'Top-up'",
+        [nameVal]
       );
     }
 
