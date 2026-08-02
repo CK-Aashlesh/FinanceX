@@ -2,20 +2,16 @@
 
 import React, { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { logoutSite } from './actions/auth';
-
-// Icons
+import { logoutSite, touchSession } from './actions/auth';
 import { 
   LogOut, 
   X,
   CheckCircle,
-  HelpCircle,
-  AlertTriangle,
-  ShieldCheck
+  AlertCircle,
+  Info,
+  RotateCcw
 } from 'lucide-react';
 
-// Components
 import SummaryCards from '@/components/SummaryCards';
 import ExpenseForm from '@/components/ExpenseForm';
 import ExpenseTable from '@/components/ExpenseTable';
@@ -56,8 +52,8 @@ export default function DashboardPage() {
     const match = document.cookie.match(/(?:^|; )site_auth=([^;]*)/);
     if (!match) return 'User';
     const cookieVal = decodeURIComponent(match[1]).toLowerCase();
-    if (cookieVal === 'treasurer@numa' || cookieVal === 'numa') return 'Numa';
-    if (cookieVal === 'treasurer@ziyana' || cookieVal === 'ziyana') return 'Ziyana';
+    if (cookieVal === 'numa@kvgce.ac.in' || cookieVal === 'numa') return 'Numa';
+    if (cookieVal === 'ziyana@kvgce.ac.in' || cookieVal === 'ziyana') return 'Ziyana';
     return cookieVal;
   };
 
@@ -83,6 +79,15 @@ export default function DashboardPage() {
     fetchExpenses();
     fetchSettings();
     setUsername(getUsernameFromCookie());
+  }, []);
+
+  // Heartbeat session touch keep-alive
+  useEffect(() => {
+    touchSession();
+    const interval = setInterval(() => {
+      touchSession();
+    }, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchSettings = async () => {
@@ -144,6 +149,8 @@ export default function DashboardPage() {
       const savedExpense = await res.json();
       setExpenses((prev) => [savedExpense, ...prev]);
       showToast('Expense logged successfully!', 'success');
+      // Refetch settings to update dynamic sponsor cards
+      fetchSettings();
     } else {
       const errData = await res.json();
       throw new Error(errData.error || 'Failed to create expense');
@@ -166,42 +173,39 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-black text-zinc-100 flex flex-col font-sans">
-      {/* Background Orange/Amber Glows */}
-      <div className="absolute top-0 left-1/4 w-[40rem] h-[40rem] rounded-full bg-orange-950/15 blur-[140px] pointer-events-none" />
-      <div className="absolute top-[20%] right-1/4 w-[35rem] h-[35rem] rounded-full bg-amber-955/5 blur-[120px] pointer-events-none" />
-
-      {/* Main Header / Navigation */}
-      <header className="border-b border-zinc-900 bg-black/80 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row gap-4 justify-between sm:items-center">
+    <div className="min-h-screen bg-background text-white flex flex-col font-sans relative overflow-hidden">
+      {/* Header */}
+      <header className="border-b border-border-subtle bg-background-secondary/90 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img 
               src="/logo.jpg" 
               alt="Sphere Hive Logo" 
-              className="w-10 h-10 object-contain invert rounded-lg"
+              className="w-10 h-10 object-contain invert rounded-[12px]"
             />
-            <div>
-              <h1 className="text-xl font-extrabold tracking-tight text-white">
+            <div className="text-left">
+              <h1 className="text-base font-bold text-white tracking-tight leading-tight">
                 Sphere Hive Expense Tracker
               </h1>
-              <p className="text-xs text-zinc-500 font-medium">
-                Welcome back, <strong className="text-orange-400 capitalize">{username}</strong>
-              </p>
+              {username && username !== 'User' && (
+                <p className="text-[10px] text-primary-accent font-semibold mt-0.5">
+                  Welcome, {username}
+                </p>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-3 self-end sm:self-auto">
-            {/* Logout */}
+          <div className="flex items-center gap-3">
             <button
               onClick={handleLogout}
               disabled={isLoggingOut}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-xl text-sm font-semibold border border-zinc-800 transition-all cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-card-bg hover:bg-card-hover text-text-secondary hover:text-white rounded-[12px] text-xs font-semibold border border-border-subtle transition-all cursor-pointer disabled:opacity-50"
             >
               {isLoggingOut ? (
-                <div className="w-4 h-4 border-2 border-zinc-400 border-t-white rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="w-3.5 h-3.5" />
                   Logout
                 </>
               )}
@@ -210,28 +214,28 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Dashboard Content Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      {/* Main Dashboard Layout */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* Left Column: Form Panel (displayed below ledger on mobile) */}
           <div id="form-container" className="order-2 lg:order-1 lg:col-span-4 scroll-mt-24">
-            <ExpenseForm 
-              onSubmit={handleFormSubmit}
-            />
+            <ExpenseForm onSubmit={handleFormSubmit} />
           </div>
 
           {/* Right Column: Summaries + Ledger Table (displayed first on mobile) */}
-          <div className="order-1 lg:order-2 lg:col-span-8 space-y-8">
+          <div className="order-1 lg:order-2 lg:col-span-8 space-y-6">
+            {/* 5 Stats Cards */}
             <section>
-              <SummaryCards expenses={expenses} sponsorBudget={sponsorBudget} sponsorName={sponsorName} />
+              <SummaryCards expenses={expenses} />
             </section>
 
+            {/* Transaction List */}
             <section className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="text-left">
-                  <h3 className="text-lg font-bold text-white">Transactions Control</h3>
-                  <p className="text-xs text-zinc-400">
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">Transactions Control</h3>
+                  <p className="text-xs text-text-secondary mt-0.5">
                     Browse the shared expense ledger. Admin permissions are required to edit or delete transactions.
                   </p>
                 </div>
@@ -240,11 +244,9 @@ export default function DashboardPage() {
                     fetchExpenses();
                     fetchSettings();
                   }}
-                  className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white rounded-xl border border-zinc-800 transition-colors cursor-pointer"
+                  className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-2 bg-card-bg hover:bg-card-hover text-xs font-semibold text-text-secondary hover:text-white rounded-[12px] border border-border-subtle transition-colors cursor-pointer"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M21 3v5h-5" />
-                  </svg>
+                  <RotateCcw className="w-3.5 h-3.5" />
                   Refresh Ledger
                 </button>
               </div>
@@ -269,21 +271,22 @@ export default function DashboardPage() {
           return (
             <div
               key={toast.id}
-              className={`p-4 rounded-xl border flex items-start gap-3 shadow-lg pointer-events-auto animate-in slide-in-from-bottom-5 duration-350 ${
+              className={`p-4 rounded-[14px] border flex items-start gap-3 shadow-xl pointer-events-auto animate-in slide-in-from-bottom-5 duration-300 ${
                 isError 
-                  ? 'bg-rose-950/80 border-rose-500/30 text-rose-200' 
+                  ? 'bg-card-bg border-danger-red/30 text-danger-red' 
                   : isInfo 
-                  ? 'bg-zinc-900/80 border-zinc-800 text-zinc-200' 
-                  : 'bg-orange-950/80 border-orange-500/30 text-orange-200'
+                  ? 'bg-card-bg border-info-blue/30 text-info-blue' 
+                  : 'bg-card-bg border-success-green/30 text-success-green'
               }`}
             >
-              {!isError && !isInfo && <CheckCircle className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />}
-              {isError && <AlertTriangle className="w-5 h-5 text-rose-450 shrink-0 mt-0.5" />}
-              {isInfo && <HelpCircle className="w-5 h-5 text-zinc-400 shrink-0 mt-0.5" />}
-              <div className="flex-1 text-sm font-medium pr-4">{toast.message}</div>
+              {isError && <AlertCircle className="w-4.5 h-4.5 shrink-0 mt-0.5" />}
+              {isInfo && <Info className="w-4.5 h-4.5 shrink-0 mt-0.5" />}
+              {!isError && !isInfo && <CheckCircle className="w-4.5 h-4.5 shrink-0 mt-0.5" />}
+
+              <div className="flex-1 text-xs font-semibold pr-4 text-left leading-normal">{toast.message}</div>
               <button
                 onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
-                className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                className="text-text-secondary hover:text-white transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
