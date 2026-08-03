@@ -3,15 +3,37 @@ import { query } from "@/lib/db";
 import { ADMIN_KEY } from "@/lib/constants";
 import crypto from "crypto";
 
-// GET /api/settings - Fetch settings
+// GET /api/settings - Fetch settings dynamically
 export async function GET() {
   try {
-    const rows = await query<any[]>("SELECT * FROM FIN_settings");
-    const settings: Record<string, string> = {};
-    rows.forEach((row) => {
-      settings[row.setting_key] = row.setting_value;
+    // Fetch all active sponsor funding config transactions (category = 'Top-up')
+    const topUps = await query<any[]>(
+      "SELECT paidBy, amount FROM FIN_expenses WHERE category = 'Top-up'"
+    );
+
+    let totalBudget = 0;
+    const names: string[] = [];
+    const sponsorsList: { name: string; budget: number }[] = [];
+
+    topUps.forEach((row) => {
+      const budgetVal = parseFloat(row.amount) || 0;
+      totalBudget += budgetVal;
+      const cleanName = String(row.paidBy).trim();
+      if (cleanName) {
+        if (!names.includes(cleanName)) {
+          names.push(cleanName);
+        }
+        sponsorsList.push({ name: cleanName, budget: budgetVal });
+      }
     });
-    return NextResponse.json(settings);
+
+    const sponsorName = names.length > 0 ? names.join(" / ") : "Sponsor";
+
+    return NextResponse.json({
+      sponsor_budget: String(totalBudget.toFixed(2)),
+      sponsor_name: sponsorName,
+      sponsors: sponsorsList
+    });
   } catch (error: any) {
     console.error("Error fetching settings:", error);
     return NextResponse.json(
@@ -25,7 +47,16 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const adminKeyHeader = request.headers.get("x-admin-key");
-    if (adminKeyHeader !== ADMIN_KEY) {
+    if (!adminKeyHeader) {
+      return NextResponse.json(
+        { error: "Unauthorized: Missing Admin key" },
+        { status: 403 },
+      );
+    }
+
+    const hashed = crypto.createHash('sha256').update(adminKeyHeader).digest('hex');
+    const adminUsers = await query<any[]>("SELECT email FROM FIN_users WHERE password_hash = ? AND role = 'admin'", [hashed]);
+    if (adminUsers.length === 0) {
       return NextResponse.json(
         { error: "Unauthorized: Invalid Admin key" },
         { status: 403 },
@@ -35,10 +66,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { sponsor_budget, sponsor_name, increment } = body;
 
-    // If increment flag is present and true, treat the provided sponsor_budget
-    // value as a top-up to be added to the existing sponsor pool. Also create
-    // an expense record for the top-up and write an activity log.
-    if (sponsor_budget !== undefined) {
+    if (sponsor_budget !== undefined && sponsor_name !== undefined) {
       const parsedBudget = parseFloat(sponsor_budget);
       if (isNaN(parsedBudget) || parsedBudget < 0) {
         return NextResponse.json(
@@ -47,96 +75,65 @@ export async function POST(request: Request) {
         );
       }
 
-      if (increment) {
-        // Read current sponsor budget
-        const rows = await query<any[]>(
-          "SELECT setting_value FROM FIN_settings WHERE setting_key = ?",
-          ["sponsor_budget"],
+      const nameVal = String(sponsor_name).trim();
+      if (!nameVal) {
+        return NextResponse.json(
+          { error: "Sponsor name is required" },
+          { status: 400 },
         );
-        let current = 0;
-        if (rows && rows.length > 0) {
-          current = parseFloat(rows[0].setting_value) || 0;
+      }
+
+      // Check if there is an existing Top-up record for this sponsor
+      const existingTopUps = await query<any[]>(
+        "SELECT id, amount FROM FIN_expenses WHERE category = 'Top-up' AND paidBy = ?",
+        [nameVal]
+      );
+
+      if (existingTopUps.length > 0) {
+        if (increment) {
+          // Add to existing sponsor budget
+          await query(
+            "UPDATE FIN_expenses SET amount = amount + ? WHERE category = 'Top-up' AND paidBy = ?",
+            [parsedBudget, nameVal]
+          );
+        } else if (parsedBudget === 0) {
+          // Setting budget to 0 deletes this sponsor's funding row
+          await query(
+            "DELETE FROM FIN_expenses WHERE category = 'Top-up' AND paidBy = ?",
+            [nameVal]
+          );
+        } else {
+          // Update existing sponsor budget amount (absolute overwrite)
+          await query(
+            "UPDATE FIN_expenses SET amount = ? WHERE category = 'Top-up' AND paidBy = ?",
+            [parsedBudget, nameVal]
+          );
         }
-
-        const newBudget = current + parsedBudget;
-
-        await query(
-          `INSERT INTO FIN_settings (setting_key, setting_value) 
-           VALUES ('sponsor_budget', ?) 
-           ON DUPLICATE KEY UPDATE setting_value = ?`,
-          [String(newBudget.toFixed(2)), String(newBudget.toFixed(2))],
-        );
-
-        // Insert a top-up expense record so it appears in the admin ledger
-        const topUpId = crypto.randomUUID();
-        const title = `Sponsor Top-up`;
-        const paidBy = sponsor_name ? String(sponsor_name).trim() : "Sponsor";
-        const dateNow = new Date();
-
-        await query(
-          `INSERT INTO FIN_expenses (id, title, amount, category, paidBy, date, notes, createdBy, paymentSource)
-           VALUES (?, ?, ?, 'Top-up', ?, ?, ?, 'admin', 'Sponsor')`,
-          [
-            topUpId,
-            title,
-            parsedBudget,
-            paidBy,
-            dateNow,
-            `Top-up by admin: ${paidBy}`,
-          ],
-        );
-
-        // Activity log
-        const logId = crypto.randomUUID();
-        await query(
-          `INSERT INTO FIN_activity_logs (id, action, username, details)
-           VALUES (?, 'CREATE', 'admin', ?)`,
-          [
-            logId,
-            `Top-up: ${paidBy} added ₹${parsedBudget.toFixed(2)} to sponsor pool`,
-          ],
-        );
       } else {
-        // Replace existing sponsor budget value
-        await query(
-          `INSERT INTO FIN_settings (setting_key, setting_value) 
-           VALUES ('sponsor_budget', ?) 
-           ON DUPLICATE KEY UPDATE setting_value = ?`,
-          [String(parsedBudget.toFixed(2)), String(parsedBudget.toFixed(2))],
-        );
-
-        // Synchronize ledger: delete previous top-up rows and insert a new absolute funding pool row
-        await query("DELETE FROM FIN_expenses WHERE category = 'Top-up'");
-        
         if (parsedBudget > 0) {
+          // Insert a new sponsor funding pool row
           const topUpId = crypto.randomUUID();
-          let finalSponsorName = sponsor_name !== undefined ? String(sponsor_name).trim() : '';
-          if (!finalSponsorName) {
-            const nameRows = await query<any[]>("SELECT setting_value FROM FIN_settings WHERE setting_key = 'sponsor_name'");
-            finalSponsorName = nameRows.length > 0 ? nameRows[0].setting_value : 'Sponsor';
-          }
-
           await query(
             `INSERT INTO FIN_expenses (id, title, amount, category, paidBy, date, notes, createdBy, paymentSource)
              VALUES (?, 'Sponsor Funding Pool', ?, 'Top-up', ?, ?, 'Sponsor funding pool configured by administrator', 'admin', 'Sponsor')`,
-            [topUpId, parsedBudget, finalSponsorName, new Date()]
+            [topUpId, parsedBudget, nameVal, new Date()]
           );
         }
       }
-    }
 
-    if (sponsor_name !== undefined) {
-      const nameVal = String(sponsor_name).trim();
+      // Write activity log
+      const logDetails = increment
+        ? `Added ₹${parsedBudget.toFixed(2)} to sponsor "${nameVal}" pool`
+        : `Configured sponsor "${nameVal}" budget to ₹${parsedBudget.toFixed(2)}`;
+
+      const logId = crypto.randomUUID();
       await query(
-        `INSERT INTO FIN_settings (setting_key, setting_value) 
-         VALUES ('sponsor_name', ?) 
-         ON DUPLICATE KEY UPDATE setting_value = ?`,
-        [nameVal, nameVal],
-      );
-      // Keep existing top-up transaction paidBy values in sync
-      await query(
-        "UPDATE FIN_expenses SET paidBy = ? WHERE category = 'Top-up'",
-        [nameVal]
+        `INSERT INTO FIN_activity_logs (id, action, username, details)
+         VALUES (?, 'UPDATE', 'admin', ?)`,
+        [
+          logId,
+          logDetails,
+        ],
       );
     }
 
