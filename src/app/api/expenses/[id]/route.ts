@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { ADMIN_KEY } from '@/lib/constants';
+import crypto from 'crypto';
 import { v2 as cloudinary } from 'cloudinary';
 
 // Configure Cloudinary
@@ -32,7 +32,12 @@ export async function PUT(request: Request, { params }: RouteParams) {
     
     // Server-side check for admin-key header
     const adminKeyHeader = request.headers.get('x-admin-key');
-    if (adminKeyHeader !== ADMIN_KEY) {
+    if (!adminKeyHeader) {
+      return NextResponse.json({ error: 'Unauthorized: Missing Admin key' }, { status: 403 });
+    }
+    const hashed = crypto.createHash('sha256').update(adminKeyHeader).digest('hex');
+    const adminUsers = await query<any[]>('SELECT email FROM FIN_users WHERE password_hash = ? AND role = \'admin\'', [hashed]);
+    if (adminUsers.length === 0) {
       return NextResponse.json({ error: 'Unauthorized: Invalid Admin key' }, { status: 403 });
     }
 
@@ -89,22 +94,6 @@ export async function PUT(request: Request, { params }: RouteParams) {
       ]
     );
 
-    // Synchronize settings if the edited row is the Sponsor Funding Pool config
-    if (isTopUp) {
-      await query(
-        `INSERT INTO FIN_settings (setting_key, setting_value) 
-         VALUES ('sponsor_budget', ?) 
-         ON DUPLICATE KEY UPDATE setting_value = ?`,
-        [String(parsedAmount.toFixed(2)), String(parsedAmount.toFixed(2))]
-      );
-      await query(
-        `INSERT INTO FIN_settings (setting_key, setting_value) 
-         VALUES ('sponsor_name', ?) 
-         ON DUPLICATE KEY UPDATE setting_value = ?`,
-        [paidBy.trim(), paidBy.trim()]
-      );
-    }
-
     // Write activity log
     const logId = crypto.randomUUID();
     await query(
@@ -138,7 +127,12 @@ export async function DELETE(request: Request, { params }: RouteParams) {
 
     // Server-side check for admin-key header
     const adminKeyHeader = request.headers.get('x-admin-key');
-    if (adminKeyHeader !== ADMIN_KEY) {
+    if (!adminKeyHeader) {
+      return NextResponse.json({ error: 'Unauthorized: Missing Admin key' }, { status: 403 });
+    }
+    const hashed = crypto.createHash('sha256').update(adminKeyHeader).digest('hex');
+    const adminUsers = await query<any[]>('SELECT email FROM FIN_users WHERE password_hash = ? AND role = \'admin\'', [hashed]);
+    if (adminUsers.length === 0) {
       return NextResponse.json({ error: 'Unauthorized: Invalid Admin key' }, { status: 403 });
     }
 
@@ -164,12 +158,6 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     // Delete record
     await query('DELETE FROM FIN_expenses WHERE id = ?', [id]);
 
-    // Synchronize settings: reset budget to 0.00 if the deleted row is the Sponsor Funding Pool config
-    if (oldExpense.category === 'Top-up') {
-      await query(
-        "UPDATE FIN_settings SET setting_value = '0.00' WHERE setting_key = 'sponsor_budget'"
-      );
-    }
 
     // Write activity log
     const logId = crypto.randomUUID();

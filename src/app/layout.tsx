@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "HackTrack - Hackathon Expense Tracker",
-  description: "Log, track, and manage shared hackathon team expenses in real-time.",
+  title: "Sphere Hive Expense Tracker",
+  description: "Sphere Hive financial logs and expense tracking console.",
 };
 
 export default function RootLayout({
@@ -26,8 +26,9 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>{children}</body>
     </html>
   );
 }
