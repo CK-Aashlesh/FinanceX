@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { query } from '@/lib/db';
+import { sendNewBillNotification } from '@/lib/email';
 import crypto from 'crypto';
 
 // GET /api/expenses - List all expenses sorted by date (newest first)
@@ -83,6 +84,11 @@ export async function POST(request: Request) {
     const createdExpenses = await query<any[]>('SELECT * FROM FIN_expenses WHERE id = ?', [newId]);
     const newExpense = createdExpenses[0];
 
+    // Trigger email notification via Resend
+    sendNewBillNotification(newExpense).catch((err) => {
+      console.error('Background email notification error:', err);
+    });
+
     return NextResponse.json(newExpense, { status: 201 });
   } catch (error: any) {
     console.error('Error creating expense:', error);
@@ -92,3 +98,4 @@ export async function POST(request: Request) {
     );
   }
 }
+
