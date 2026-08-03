@@ -1,12 +1,5 @@
 import { Resend } from 'resend';
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const NOTIFICATION_EMAIL = process.env.NOTIFICATION_EMAIL || 'spherehive@gmail.com';
-const SENDER_EMAIL = process.env.RESEND_FROM_EMAIL || 'FinanceX <onboarding@resend.dev>';
-
-
-const resend = new Resend(RESEND_API_KEY);
-
 export interface ExpenseNotificationPayload {
   id: string;
   title: string;
@@ -22,6 +15,16 @@ export interface ExpenseNotificationPayload {
 
 export async function sendNewBillNotification(expense: ExpenseNotificationPayload) {
   try {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.warn('[Email Notification] RESEND_API_KEY is not defined in environment variables.');
+      return null;
+    }
+
+    const recipient = process.env.NOTIFICATION_EMAIL || 'spherehive@gmail.com';
+    const sender = process.env.RESEND_FROM_EMAIL || 'FinanceX <onboarding@resend.dev>';
+    const resend = new Resend(apiKey);
+
     const formattedAmount = new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
@@ -134,17 +137,16 @@ export async function sendNewBillNotification(expense: ExpenseNotificationPayloa
     `;
 
     const response = await resend.emails.send({
-      from: SENDER_EMAIL,
-      to: NOTIFICATION_EMAIL,
+      from: sender,
+      to: recipient,
       subject: `[FinanceX] New Bill Added: ${expense.title} (${formattedAmount})`,
       html: htmlContent,
     });
 
-    console.log(`[Email Notification] Successfully dispatched to ${NOTIFICATION_EMAIL}`, response);
+    console.log(`[Email Notification] Successfully dispatched to ${recipient}`, response);
     return response;
   } catch (error) {
     console.error('[Email Notification Error] Failed to send email via Resend:', error);
-    // Silent fail so API flow isn't interrupted
     return null;
   }
 }
